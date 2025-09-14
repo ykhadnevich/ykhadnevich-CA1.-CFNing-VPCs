@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation template to create a VPC with subnets, IGW, and routing"
+
+Parameters:
+  paramVpcCIDR:
+    Description: Enter the IP range (CIDR notation) for the VPC
+    Type: String
+    Default: 10.192.0.0/16
+
+  paramPublicSubnet1CIDR:
+    Description: Enter the IP range (CIDR notation) for the public subnet in AZ1
+    Type: String
+    Default: 10.192.1.0/24
+
+  paramPublicSubnet2CIDR:
+    Description: Enter the IP range (CIDR notation) for the public subnet in AZ2
+    Type: String
+    Default: 10.192.2.0/24
+
+  paramUniqueName:
+    Description: A unique name for tagging resources
+    Type: String
+    Default: MyVPC
+
+Resources:
+  # VPC
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref paramVpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref paramUniqueName
+
+  # Internet Gateway
+  myInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${paramUniqueName}-igw"
+
+  myAttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref myVPC
+      InternetGatewayId: !Ref myInternetGateway
+
+  # Public Subnet 1
+  myPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref paramPublicSubnet1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${paramUniqueName}-public-subnet-1"
+
+  # Public Subnet 2
+  myPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref paramPublicSubnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${paramUniqueName}-public-subnet-2"
+
+  # Route Table
+  myRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${paramUniqueName}-public-rt"
+
+  # Route to Internet
+  myRoute:
+    Type: AWS::EC2::Route
+    DependsOn: myAttachGateway
+    Properties:
+      RouteTableId: !Ref myRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref myInternetGateway
+
+  # Route Table Associations
+  mySubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPublicSubnet1
+      RouteTableId: !Ref myRouteTable
+
+  mySubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPublicSubnet2
+      RouteTableId: !Ref myRouteTable
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref myVPC
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref myPublicSubnet1
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref myPublicSubnet2
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref myInternetGateway
